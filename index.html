@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تطبيق إدارة البطاقات - متصل بقاعدة البيانات</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <style>
+        /* جميع الأنماط كما هي في الإصدار السابق (مختصرة هنا للتركيز على المنطق) */
+        :root { --bg: #f0f4f8; --card: #ffffff; --primary: #4A6CF7; --primary-dark: #3651d5; --text: #1e293b; --text-light: #64748b; --border: #e2e8f0; --shadow: 0 4px 24px rgba(0,0,0,0.08); --radius: 16px; --radius-sm: 10px; --danger: #ef4444; --success: #10b981; --transition: 0.25s ease; }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family: 'Segoe UI', 'Tajawal', 'Cairo', sans-serif; background: var(--bg); min-height:100vh; display:flex; align-items:center; justify-content:center; padding:16px; transition: background 0.5s; direction:rtl; }
+        .app-container { width:100%; max-width:440px; background:var(--card); border-radius:20px; box-shadow:var(--shadow); overflow:hidden; position:relative; min-height:620px; transition:all var(--transition); }
+        .screen { display:none; padding:28px 22px; flex-direction:column; animation:fadeSlideIn 0.35s ease; }
+        .screen.active { display:flex; }
+        @keyframes fadeSlideIn { from{opacity:0;transform:translateY(18px);} to{opacity:1;transform:translateY(0);} }
+        .login-header { text-align:center; margin-bottom:28px; }
+        .login-header .logo-icon { font-size:52px; color:var(--primary); margin-bottom:8px; }
+        .login-header h2 { font-size:22px; color:var(--text); font-weight:700; }
+        .login-header p { color:var(--text-light); font-size:14px; margin-top:4px; }
+        .form-group { margin-bottom:16px; position:relative; }
+        .form-group label { display:block; font-weight:600; margin-bottom:5px; color:var(--text); font-size:14px; }
+        .form-group input, .form-group select { width:100%; padding:12px 14px; border:2px solid var(--border); border-radius:var(--radius-sm); font-size:15px; transition:all var(--transition); background:#f8fafc; color:var(--text); font-family:inherit; }
+        .form-group input:focus, .form-group select:focus { outline:none; border-color:var(--primary); box-shadow:0 0 0 3px rgba(74,108,247,0.1); background:#fff; }
+        .form-group .input-icon { position:absolute; top:38px; right:14px; color:var(--text-light); pointer-events:none; }
+        .form-group input { padding-right:38px; }
+        .btn { width:100%; padding:13px; border:none; border-radius:var(--radius-sm); font-size:16px; font-weight:700; cursor:pointer; transition:all var(--transition); font-family:inherit; }
+        .btn-primary { background:var(--primary); color:#fff; }
+        .btn-primary:hover { background:var(--primary-dark); transform:translateY(-1px); box-shadow:0 6px 20px rgba(74,108,247,0.3); }
+        .btn-outline { background:transparent; color:var(--primary); border:2px solid var(--primary); }
+        .btn-outline:hover { background:rgba(74,108,247,0.05); }
+        .btn-danger { background:var(--danger); color:#fff; }
+        .btn-sm { width:auto; padding:8px 16px; font-size:13px; border-radius:8px; }
+        .btn-xs { width:auto; padding:5px 10px; font-size:11px; border-radius:6px; }
+        .link-text { text-align:center; margin-top:12px; font-size:13px; color:var(--text-light); }
+        .link-text a { color:var(--primary); cursor:pointer; font-weight:600; text-decoration:none; }
+        .link-text a:hover { text-decoration:underline; }
+        /* dashboard styles */
+        .dashboard-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
+        .dashboard-top .user-info { display:flex; align-items:center; gap:10px; }
+        .dashboard-top .avatar { width:48px; height:48px; border-radius:50%; background:var(--primary); display:flex; align-items:center; justify-content:center; font-size:22px; color:#fff; overflow:hidden; flex-shrink:0; }
+        .dashboard-top .avatar img { width:100%; height:100%; object-fit:cover; }
+        .dashboard-top .user-details h4 { font-size:15px; color:var(--text); }
+        .dashboard-top .user-details span { font-size:12px; color:var(--text-light); }
+        .settings-btn { width:40px; height:40px; border-radius:50%; background:#f1f5f9; border:none; cursor:pointer; font-size:18px; color:var(--text); transition:all var(--transition); display:flex; align-items:center; justify-content:center; }
+        .settings-btn:hover { background:#e2e8f0; transform:rotate(60deg); }
+        .qrcode-section { text-align:center; margin-bottom:18px; padding:14px; background:#fafbfc; border-radius:var(--radius); border:2px dashed var(--border); }
+        .qrcode-section img { width:150px; height:150px; border-radius:8px; }
+        .qrcode-section p { font-size:11px; color:var(--text-light); margin-top:6px; }
+        .section-title { font-size:15px; font-weight:700; color:var(--text); margin-bottom:10px; display:flex; align-items:center; gap:6px; }
+        .section-title i { color:var(--primary); }
+        .social-grid { display:grid; grid-template-columns: repeat(3,1fr); gap:10px; margin-bottom:18px; }
+        .social-item { display:flex; align-items:center; gap:6px; padding:10px; background:#f8fafc; border-radius:var(--radius-sm); transition:all var(--transition); border:2px solid transparent; position:relative; }
+        .social-item.linked { border-color:#d1fae5; background:#f0fdf6; cursor:pointer; }
+        .social-item.linked:hover { box-shadow:0 2px 12px rgba(0,0,0,0.08); transform:translateY(-2px); }
+        .social-icon-circle { width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:17px; color:#fff; flex-shrink:0; }
+        .social-item:not(.linked) .social-icon-circle { background:#cbd5e1!important; color:#fff; }
+        .social-item.linked .social-icon-circle { box-shadow:0 3px 10px rgba(0,0,0,0.15); }
+        .bg-facebook{background:#1877F2;} .bg-instagram{background:linear-gradient(135deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888);}
+        .bg-twitter{background:#000;} .bg-linkedin{background:#0A66C2;} .bg-tiktok{background:#000;} .bg-snapchat{background:#FFFC00;color:#000!important;}
+        .bg-whatsapp{background:#25D366;} .bg-telegram{background:#26A5E4;} .bg-youtube{background:#FF0000;}
+        .social-add-btn { width:26px; height:26px; border-radius:50%; background:#e2e8f0; border:none; cursor:pointer; font-size:11px; color:#64748b; transition:all var(--transition); flex-shrink:0; display:flex; align-items:center; justify-content:center; }
+        .social-add-btn:hover { background:var(--primary); color:#fff; }
+        .social-item.linked .social-add-btn { background:#d1fae5; color:#10b981; }
+        .social-item.linked .social-add-btn:hover { background:#ef4444; color:#fff; }
+        .bank-list { list-style:none; margin-bottom:14px; }
+        .bank-card { background:#f8fafc; border-radius:var(--radius-sm); padding:12px 14px; margin-bottom:8px; cursor:pointer; border:2px solid transparent; transition:all var(--transition); position:relative; }
+        .bank-card:hover { border-color:#d1e0ff; box-shadow:0 2px 10px rgba(0,0,0,0.05); }
+        .bank-card .bank-name { font-weight:700; color:var(--text); font-size:14px; display:flex; align-items:center; gap:8px; }
+        .bank-card .bank-name i { color:var(--primary); }
+        .bank-details { display:none; margin-top:10px; padding-top:10px; border-top:1px solid var(--border); font-size:13px; color:var(--text-light); line-height:1.8; }
+        .bank-card.expanded .bank-details { display:block; }
+        .bank-details span { font-weight:600; color:var(--text); }
+        .bank-delete-btn { position:absolute; top:10px; left:10px; background:transparent; border:none; color:#cbd5e1; cursor:pointer; font-size:14px; transition:all var(--transition); }
+        .bank-delete-btn:hover { color:var(--danger); }
+        .add-bank-btn { width:100%; padding:11px; background:transparent; border:2px dashed var(--border); border-radius:var(--radius-sm); cursor:pointer; font-size:14px; color:var(--text-light); transition:all var(--transition); font-family:inherit; font-weight:600; }
+        .add-bank-btn:hover { border-color:var(--primary); color:var(--primary); background:rgba(74,108,247,0.03); }
+        .modal-overlay { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; align-items:center; justify-content:center; padding:20px; }
+        .modal-overlay.active { display:flex; }
+        .modal-box { background:#fff; border-radius:var(--radius); padding:24px 20px; width:100%; max-width:400px; box-shadow:0 20px 50px rgba(0,0,0,0.2); animation:fadeSlideIn 0.3s ease; position:relative; max-height:85vh; overflow-y:auto; }
+        .modal-box h3 { font-size:18px; margin-bottom:16px; color:var(--text); text-align:center; }
+        .modal-close { position:absolute; top:12px; left:14px; background:transparent; border:none; font-size:20px; cursor:pointer; color:#94a3b8; transition:all var(--transition); }
+        .modal-close:hover { color:var(--danger); transform:scale(1.1); }
+        .settings-section { margin-bottom:20px; padding-bottom:16px; border-bottom:1px solid var(--border); }
+        .settings-section h4 { font-size:14px; color:var(--text); margin-bottom:10px; font-weight:700; }
+        .color-presets { display:flex; flex-wrap:wrap; gap:10px; }
+        .color-dot { width:36px; height:36px; border-radius:50%; cursor:pointer; border:3px solid transparent; transition:all var(--transition); box-shadow:0 2px 6px rgba(0,0,0,0.1); }
+        .color-dot:hover { transform:scale(1.15); border-color:var(--text); }
+        .color-dot.selected { border-color:var(--text); box-shadow:0 0 0 4px rgba(0,0,0,0.1); }
+        .profile-pic-upload { display:flex; align-items:center; gap:14px; }
+        .profile-pic-upload img { width:64px; height:64px; border-radius:50%; object-fit:cover; border:3px solid var(--border); }
+        .toast { position:fixed; bottom:30px; left:50%; transform:translateX(-50%); background:#1e293b; color:#fff; padding:12px 24px; border-radius:30px; font-size:14px; z-index:2000; animation:toastIn 0.3s ease, toastOut 0.3s ease 2.2s forwards; pointer-events:none; white-space:nowrap; }
+        @keyframes toastIn { from{opacity:0;transform:translateX(-50%) translateY(20px);} to{opacity:1;transform:translateX(-50%) translateY(0);} }
+        @keyframes toastOut { from{opacity:1;} to{opacity:0;transform:translateX(-50%) translateY(-10px);} }
+        @media(max-width:460px){ .social-grid{grid-template-columns:repeat(3,1fr);gap:6px;} .social-item{padding:8px 6px;gap:4px;} .social-icon-circle{width:30px;height:30px;font-size:14px;} .social-add-btn{width:22px;height:22px;font-size:10px;} .screen{padding:20px 14px;} }
+    </style>
+</head>
+<body>
+    <div class="app-container" id="appContainer">
+        <!-- شاشة تسجيل الدخول -->
+        <div class="screen active" id="loginScreen">
+            <div class="login-header">
+                <div class="logo-icon"><i class="fa-solid fa-address-card"></i></div>
+                <h2>تسجيل الدخول</h2>
+                <p>أدخل بياناتك للوصول إلى بطاقاتك</p>
+            </div>
+            <div class="form-group">
+                <label>البريد الإلكتروني</label>
+                <input type="email" id="loginEmail" placeholder="example@email.com">
+                <i class="fa-solid fa-envelope input-icon"></i>
+            </div>
+            <div class="form-group">
+                <label>كلمة السر</label>
+                <input type="password" id="loginPassword" placeholder="••••••••">
+                <i class="fa-solid fa-lock input-icon"></i>
+            </div>
+            <button class="btn btn-primary" onclick="handleLogin()">
+                <i class="fa-solid fa-right-to-bracket"></i> تسجيل الدخول
+            </button>
+            <div class="link-text">
+                <a onclick="showScreen('registerScreen')">تسجيل جديد</a> |
+                <a onclick="showScreen('forgotScreen')">نسيت كلمة السر</a>
+            </div>
+        </div>
+
+        <!-- شاشة التسجيل -->
+        <div class="screen" id="registerScreen">
+            <div class="login-header">
+                <div class="logo-icon"><i class="fa-solid fa-user-plus"></i></div>
+                <h2>تسجيل جديد</h2>
+                <p>أنشئ حسابك لإدارة بطاقاتك</p>
+            </div>
+            <div class="form-group"><label>الاسم الرباعي</label><input type="text" id="regFullName"><i class="fa-solid fa-user input-icon"></i></div>
+            <div class="form-group"><label>رقم الهاتف</label><input type="tel" id="regPhone"><i class="fa-solid fa-phone input-icon"></i></div>
+            <div class="form-group"><label>البريد الإلكتروني</label><input type="email" id="regEmail"><i class="fa-solid fa-envelope input-icon"></i></div>
+            <div class="form-group"><label>كلمة السر</label><input type="password" id="regPassword"><i class="fa-solid fa-lock input-icon"></i></div>
+            <div class="form-group"><label>تاريخ الميلاد</label><input type="date" id="regDob"></div>
+            <div class="form-group"><label>الولاية</label>
+                <select id="regState">
+                    <option value="">-- اختر الولاية --</option>
+                    <option>الخرطوم</option><option>الجزيرة</option><option>البحر الأحمر</option><option>كسلا</option><option>القضارف</option><option>سنار</option><option>النيل الأزرق</option><option>النيل الأبيض</option><option>شمال كردفان</option><option>جنوب كردفان</option><option>غرب كردفان</option><option>شمال دارفور</option><option>جنوب دارفور</option><option>غرب دارفور</option><option>شرق دارفور</option><option>وسط دارفور</option><option>الشمالية</option><option>نهر النيل</option>
+                </select>
+            </div>
+            <button class="btn btn-primary" onclick="handleRegister()"><i class="fa-solid fa-check"></i> تسجيل</button>
+            <div class="link-text"><a onclick="showScreen('loginScreen')">العودة لتسجيل الدخول</a></div>
+        </div>
+
+        <!-- شاشة نسيت كلمة السر -->
+        <div class="screen" id="forgotScreen">
+            <div class="login-header"><div class="logo-icon"><i class="fa-solid fa-key"></i></div><h2>استعادة كلمة السر</h2></div>
+            <div class="form-group"><label>البريد الإلكتروني</label><input type="email" id="forgotEmail"></div>
+            <div class="form-group"><label>رقم الهاتف</label><input type="tel" id="forgotPhone"></div>
+            <div class="form-group"><label>كلمة السر الجديدة</label><input type="password" id="forgotNewPassword"></div>
+            <button class="btn btn-primary" onclick="handleForgotPassword()"><i class="fa-solid fa-rotate"></i> تعيين كلمة السر</button>
+            <div class="link-text"><a onclick="showScreen('loginScreen')">العودة لتسجيل الدخول</a></div>
+        </div>
+
+        <!-- الشاشة الرئيسية -->
+        <div class="screen" id="dashboardScreen">
+            <div class="dashboard-top">
+                <div class="user-info">
+                    <div class="avatar" id="dashAvatar"><i class="fa-solid fa-user"></i></div>
+                    <div class="user-details"><h4 id="dashFullName">---</h4><span id="dashPhone">---</span></div>
+                </div>
+                <button class="settings-btn" onclick="openSettings()"><i class="fa-solid fa-gear"></i></button>
+            </div>
+            <div class="qrcode-section">
+                <img id="qrcodeImage" src="https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=Welcome" alt="QR Code">
+                <p><i class="fa-solid fa-qrcode"></i> امسح الباركود لمشاركة معلوماتك</p>
+            </div>
+            <div class="section-title"><i class="fa-solid fa-share-nodes"></i> مواقع التواصل الاجتماعي</div>
+            <div class="social-grid" id="socialGrid"></div>
+            <div class="section-title"><i class="fa-solid fa-building-columns"></i> الحسابات البنكية</div>
+            <ul class="bank-list" id="bankList"></ul>
+            <button class="add-bank-btn" onclick="openAddBankModal()"><i class="fa-solid fa-plus"></i> إضافة حساب بنكي</button>
+            <div style="text-align:center; margin-top:16px;">
+                <button class="btn btn-danger btn-sm" onclick="handleLogout()"><i class="fa-solid fa-right-from-bracket"></i> تسجيل الخروج</button>
+            </div>
+        </div>
+
+        <!-- مودال إضافة رابط -->
+        <div class="modal-overlay" id="socialModal">
+            <div class="modal-box">
+                <button class="modal-close" onclick="closeModal('socialModal')">✕</button>
+                <h3 id="socialModalTitle">إضافة رابط</h3>
+                <div class="form-group"><label>الرابط الكامل</label><input type="url" id="socialLinkInput"></div>
+                <button class="btn btn-primary" onclick="saveSocialLink()">حفظ الرابط</button>
+                <button class="btn btn-outline" style="margin-top:8px;" onclick="removeSocialLink()"><i class="fa-solid fa-trash"></i> حذف الرابط</button>
+                <input type="hidden" id="socialPlatformKey">
+            </div>
+        </div>
+
+        <!-- مودال حساب بنكي -->
+        <div class="modal-overlay" id="bankModal">
+            <div class="modal-box">
+                <button class="modal-close" onclick="closeModal('bankModal')">✕</button>
+                <h3>إضافة حساب بنكي</h3>
+                <div class="form-group"><label>اسم البنك</label><input type="text" id="bankNameInput"></div>
+                <div class="form-group"><label>الفرع</label><input type="text" id="bankBranchInput"></div>
+                <div class="form-group"><label>رقم الحساب</label><input type="text" id="bankAccountInput"></div>
+                <div class="form-group"><label>رقم الإشعار</label><input type="text" id="bankNotifyInput"></div>
+                <button class="btn btn-primary" onclick="saveBankAccount()">حفظ الحساب</button>
+                <input type="hidden" id="editingBankIndex" value="-1">
+            </div>
+        </div>
+
+        <!-- مودال الإعدادات -->
+        <div class="modal-overlay" id="settingsModal">
+            <div class="modal-box">
+                <button class="modal-close" onclick="closeModal('settingsModal')">✕</button>
+                <h3><i class="fa-solid fa-gear"></i> الإعدادات</h3>
+                <div class="settings-section">
+                    <h4>تغيير كلمة السر</h4>
+                    <div class="form-group"><label>كلمة السر القديمة</label><input type="password" id="settingsOldPassword"></div>
+                    <div class="form-group"><label>كلمة السر الجديدة</label><input type="password" id="settingsNewPassword"></div>
+                    <button class="btn btn-primary btn-sm" onclick="changePassword()">تحديث كلمة السر</button>
+                </div>
+                <div class="settings-section">
+                    <h4>تغيير لون الخلفية</h4>
+                    <div class="color-presets" id="colorPresets"></div>
+                </div>
+                <div class="settings-section">
+                    <h4>صورة الحساب</h4>
+                    <div class="profile-pic-upload">
+                        <img id="settingsProfilePreview" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='50' fill='%23cbd5e1'/%3E%3Ccircle cx='50' cy='38' r='16' fill='%23fff'/%3E%3Cellipse cx='50' cy='75' rx='28' ry='18' fill='%23fff'/%3E%3C/svg%3E" alt="صورة الملف">
+                        <input type="file" id="profilePicInput" accept="image/*" onchange="handleProfilePicUpload(event)">
+                    </div>
+                    <button class="btn btn-outline btn-sm" style="margin-top:8px;" onclick="removeProfilePic()"><i class="fa-solid fa-trash"></i> إزالة الصورة</button>
+                </div>
+                <button class="btn btn-outline" onclick="closeModal('settingsModal')">إغلاق</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ========== الإعدادات العامة ==========
+        const API_BASE = '';  // لأن الملفات تُقدم من نفس الخادم
+        const TOKEN_KEY = 'app_token';
+        let currentUserData = null; // تخزين بيانات المستخدم بعد جلبها
+
+        const socialPlatforms = [
+            {key:'facebook',name:'فيسبوك',icon:'fa-brands fa-facebook-f',bgClass:'bg-facebook',placeholder:'https://facebook.com/...'},
+            {key:'instagram',name:'انستغرام',icon:'fa-brands fa-instagram',bgClass:'bg-instagram',placeholder:'https://instagram.com/...'},
+            {key:'twitter',name:'تويتر / X',icon:'fa-brands fa-x-twitter',bgClass:'bg-twitter',placeholder:'https://x.com/...'},
+            {key:'linkedin',name:'لينكد إن',icon:'fa-brands fa-linkedin-in',bgClass:'bg-linkedin',placeholder:'https://linkedin.com/in/...'},
+            {key:'tiktok',name:'تيك توك',icon:'fa-brands fa-tiktok',bgClass:'bg-tiktok',placeholder:'https://tiktok.com/@...'},
+            {key:'snapchat',name:'سناب شات',icon:'fa-brands fa-snapchat',bgClass:'bg-snapchat',placeholder:'https://snapchat.com/add/...'},
+            {key:'whatsapp',name:'واتساب',icon:'fa-brands fa-whatsapp',bgClass:'bg-whatsapp',placeholder:'https://wa.me/...'},
+            {key:'telegram',name:'تيليجرام',icon:'fa-brands fa-telegram',bgClass:'bg-telegram',placeholder:'https://t.me/...'},
+            {key:'youtube',name:'يوتيوب',icon:'fa-brands fa-youtube',bgClass:'bg-youtube',placeholder:'https://youtube.com/@...'}
+        ];
+
+        const colorPresets = ['#f0f4f8','#e8f5e9','#fff3e0','#fce4ec','#e3f2fd','#f3e5f5','#e0f7fa','#fff8e1','#efebe9','#eceff1','#d5e8d4','#dae8fc','#ffe6cc','#e1d5e7','#f8cecc'];
+
+        function getToken() { return localStorage.getItem(TOKEN_KEY); }
+        function setToken(token) { localStorage.setItem(TOKEN_KEY, token); }
+        function clearToken() { localStorage.removeItem(TOKEN_KEY); }
+
+        async function apiRequest(url, options = {}) {
+            const token = getToken();
+            const headers = { 'Content-Type': 'application/json' };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+            const response = await fetch(API_BASE + url, { ...options, headers: { ...headers, ...options.headers } });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || 'حدث خطأ');
+            return data;
+        }
+
+        function showToast(msg) {
+            const existing = document.querySelector('.toast');
+            if(existing) existing.remove();
+            const toast = document.createElement('div'); toast.className='toast'; toast.textContent=msg;
+            document.body.appendChild(toast);
+            setTimeout(()=>toast.remove(),2600);
+        }
+
+        function showScreen(screenId) {
+            document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+            document.getElementById(screenId).classList.add('active');
+            if(screenId==='dashboardScreen') refreshDashboard();
+            if(screenId==='settingsModal') refreshSettings();
+        }
+
+        function closeModal(modalId) { document.getElementById(modalId).classList.remove('active'); }
+        function openModal(modalId) { document.getElementById(modalId).classList.add('active'); }
+
+        // ========== المصادقة ==========
+        async function handleLogin() {
+            const email = document.getElementById('loginEmail').value.trim();
+            const password = document.getElementById('loginPassword').value.trim();
+            if(!email||!password) return showToast('⚠️ الرجاء إدخال البريد وكلمة السر');
+            try {
+                const data = await apiRequest('/api/login', { method:'POST', body: JSON.stringify({email, password}) });
+                setToken(data.token);
+                document.getElementById('loginEmail').value = '';
+                document.getElementById('loginPassword').value = '';
+                showScreen('dashboardScreen');
+                showToast('✅ مرحباً بك');
+            } catch(e) { showToast('❌ ' + e.message); }
+        }
+
+        async function handleRegister() {
+            const fullName = document.getElementById('regFullName').value.trim();
+            const phone = document.getElementById('regPhone').value.trim();
+            const email = document.getElementById('regEmail').value.trim();
+            const password = document.getElementById('regPassword').value.trim();
+            const dob = document.getElementById('regDob').value;
+            const state = document.getElementById('regState').value;
+            if(!fullName||!phone||!email||!password||!dob||!state) return showToast('⚠️ الرجاء تعبئة جميع الحقول');
+            if(password.length<4) return showToast('⚠️ كلمة السر قصيرة');
+            try {
+                const data = await apiRequest('/api/register', { method:'POST', body: JSON.stringify({fullName,phone,email,password,dob,state}) });
+                setToken(data.token);
+                ['regFullName','regPhone','regEmail','regPassword','regDob'].forEach(id=>document.getElementById(id).value='');
+                document.getElementById('regState').value='';
+                showScreen('dashboardScreen');
+                showToast('✅ تم التسجيل بنجاح');
+            } catch(e) { showToast('⚠️ ' + e.message); }
+        }
+
+        async function handleForgotPassword() {
+            const email = document.getElementById('forgotEmail').value.trim();
+            const phone = document.getElementById('forgotPhone').value.trim();
+            const newPassword = document.getElementById('forgotNewPassword').value.trim();
+            if(!email||!phone||!newPassword) return showToast('⚠️ جميع الحقول مطلوبة');
+            if(newPassword.length<4) return showToast('⚠️ كلمة السر قصيرة');
+            try {
+                await apiRequest('/api/forgot-password', { method:'POST', body: JSON.stringify({email, phone, newPassword}) });
+                document.getElementById('forgotEmail').value='';
+                document.getElementById('forgotPhone').value='';
+                document.getElementById('forgotNewPassword').value='';
+                showScreen('loginScreen');
+                showToast('✅ تم تعيين كلمة السر الجديدة');
+            } catch(e) { showToast('❌ ' + e.message); }
+        }
+
+        function handleLogout() { clearToken(); currentUserData=null; showScreen('loginScreen'); showToast('👋 تم تسجيل الخروج'); }
+
+        // ========== تحميل الشاشة الرئيسية ==========
+        async function refreshDashboard() {
+            if(!getToken()) { handleLogout(); return; }
+            try {
+                currentUserData = await apiRequest('/api/me');
+                document.getElementById('dashFullName').textContent = currentUserData.fullName;
+                document.getElementById('dashPhone').textContent = currentUserData.phone;
+                const avatar = document.getElementById('dashAvatar');
+                if(currentUserData.profilePicture) avatar.innerHTML = `<img src="${currentUserData.profilePicture}" alt="صورة">`;
+                else avatar.innerHTML = '<i class="fa-solid fa-user"></i>';
+                document.body.style.backgroundColor = currentUserData.backgroundColor || '#f0f4f8';
+                renderSocialGrid();
+                renderBankList();
+                updateQRCode();
+            } catch(e) { showToast('انتهت الجلسة'); clearToken(); showScreen('loginScreen'); }
+        }
+
+        function renderSocialGrid() {
+            const grid = document.getElementById('socialGrid'); grid.innerHTML='';
+            const links = currentUserData.socialLinks || {};
+            socialPlatforms.forEach(platform => {
+                const hasLink = links[platform.key] && links[platform.key].trim()!=='';
+                const item = document.createElement('div'); item.className='social-item'+(hasLink?' linked':'');
+                item.innerHTML = `<div class="social-icon-circle ${platform.bgClass}"><i class="${platform.icon}"></i></div>
+                    <button class="social-add-btn"><i class="fa-solid ${hasLink?'fa-pen':'fa-plus'}"></i></button>`;
+                const iconCircle = item.querySelector('.social-icon-circle');
+                iconCircle.addEventListener('click', (e)=>{
+                    e.stopPropagation();
+                    if(hasLink) window.open(links[platform.key].startsWith('http')?links[platform.key]:'https://'+links[platform.key], '_blank');
+                    else showToast('ℹ️ أضف رابط '+platform.name+' أولاً');
+                });
+                const addBtn = item.querySelector('.social-add-btn');
+                addBtn.addEventListener('click', (e)=>{ e.stopPropagation(); openSocialModal(platform, hasLink?links[platform.key]:''); });
+                grid.appendChild(item);
+            });
+        }
+
+        function renderBankList() {
+            const list = document.getElementById('bankList'); list.innerHTML='';
+            const banks = currentUserData.bankAccounts || [];
+            banks.forEach((bank, index)=>{
+                const li = document.createElement('li'); li.className='bank-card';
+                li.innerHTML = `<div class="bank-name"><i class="fa-solid fa-building-columns"></i> ${bank.bankName}</div>
+                    <div class="bank-details"><span>الفرع:</span> ${bank.branch}<br><span>رقم الحساب:</span> ${bank.accountNumber}<br><span>رقم الإشعار:</span> ${bank.notificationNumber}</div>
+                    <button class="bank-delete-btn"><i class="fa-solid fa-trash-can"></i></button>`;
+                li.querySelector('.bank-name').addEventListener('click', (e)=>{ e.stopPropagation(); li.classList.toggle('expanded'); });
+                li.querySelector('.bank-delete-btn').addEventListener('click', (e)=>{ e.stopPropagation(); deleteBankAccount(bank.id); });
+                list.appendChild(li);
+            });
+        }
+
+        function updateQRCode() {
+            let qrData = `الاسم: ${currentUserData.fullName}\nالهاتف: ${currentUserData.phone}\nالبريد: ${currentUserData.email}\nالولاية: ${currentUserData.state}\n`;
+            const links = currentUserData.socialLinks||{};
+            const active=[]; for(let [k,v] of Object.entries(links)) if(v&&v.trim()){ const p=socialPlatforms.find(x=>x.key===k); active.push(`${p?p.name:k}: ${v}`); }
+            if(active.length) qrData += `--- روابط ---\n${active.join('\n')}\n`;
+            const banks=currentUserData.bankAccounts||[];
+            if(banks.length){ qrData += `--- حسابات بنكية ---\n`; banks.forEach(b=>qrData+=`${b.bankName} | فرع:${b.branch} | حساب:${b.accountNumber} | إشعار:${b.notificationNumber}\n`); }
+            document.getElementById('qrcodeImage').src = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(qrData)}`;
+        }
+
+        // ========== التواصل الاجتماعي ==========
+        let currentSocialPlatform = null;
+        function openSocialModal(platform, currentLink) {
+            currentSocialPlatform=platform;
+            document.getElementById('socialModalTitle').textContent='رابط '+platform.name;
+            document.getElementById('socialLinkInput').value=currentLink||'';
+            document.getElementById('socialPlatformKey').value=platform.key;
+            openModal('socialModal');
+        }
+        async function saveSocialLink() {
+            const key = document.getElementById('socialPlatformKey').value;
+            const url = document.getElementById('socialLinkInput').value.trim();
+            try {
+                await apiRequest(`/api/social-links/${key}`, { method:'PUT', body: JSON.stringify({url}) });
+                closeModal('socialModal');
+                await refreshDashboard();
+                showToast(url?'✅ تم حفظ الرابط':'🗑️ تم حذف الرابط');
+            } catch(e) { showToast('❌ '+e.message); }
+        }
+        async function removeSocialLink() {
+            const key = document.getElementById('socialPlatformKey').value;
+            try {
+                await apiRequest(`/api/social-links/${key}`, { method:'DELETE' });
+                closeModal('socialModal');
+                await refreshDashboard();
+                showToast('🗑️ تم حذف الرابط');
+            } catch(e) { showToast('❌ '+e.message); }
+        }
+
+        // ========== الحسابات البنكية ==========
+        function openAddBankModal() {
+            document.getElementById('bankNameInput').value='';
+            document.getElementById('bankBranchInput').value='';
+            document.getElementById('bankAccountInput').value='';
+            document.getElementById('bankNotifyInput').value='';
+            document.getElementById('editingBankIndex').value='-1';
+            openModal('bankModal');
+        }
+        async function saveBankAccount() {
+            const bankName = document.getElementById('bankNameInput').value.trim();
+            const branch = document.getElementById('bankBranchInput').value.trim();
+            const accountNumber = document.getElementById('bankAccountInput').value.trim();
+            const notificationNumber = document.getElementById('bankNotifyInput').value.trim();
+            if(!bankName||!branch||!accountNumber||!notificationNumber) return showToast('⚠️ جميع الحقول مطلوبة');
+            try {
+                await apiRequest('/api/bank-accounts', { method:'POST', body: JSON.stringify({bankName,branch,accountNumber,notificationNumber}) });
+                closeModal('bankModal');
+                await refreshDashboard();
+                showToast('✅ تمت إضافة الحساب');
+            } catch(e) { showToast('❌ '+e.message); }
+        }
+        async function deleteBankAccount(id) {
+            try {
+                await apiRequest(`/api/bank-accounts/${id}`, { method:'DELETE' });
+                await refreshDashboard();
+                showToast('🗑️ تم حذف الحساب');
+            } catch(e) { showToast('❌ '+e.message); }
+        }
+
+        // ========== الإعدادات ==========
+        function openSettings() { refreshSettings(); openModal('settingsModal'); }
+        function refreshSettings() {
+            if(!currentUserData) return;
+            const preview = document.getElementById('settingsProfilePreview');
+            preview.src = currentUserData.profilePicture || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'...";
+            const presetsContainer = document.getElementById('colorPresets'); presetsContainer.innerHTML='';
+            colorPresets.forEach(color=>{
+                const dot = document.createElement('span'); dot.className='color-dot'+(color===currentUserData.backgroundColor?' selected':'');
+                dot.style.backgroundColor=color;
+                dot.addEventListener('click', ()=> changeBackgroundColor(color));
+                presetsContainer.appendChild(dot);
+            });
+            document.getElementById('settingsOldPassword').value='';
+            document.getElementById('settingsNewPassword').value='';
+        }
+        async function changePassword() {
+            const oldPassword = document.getElementById('settingsOldPassword').value.trim();
+            const newPassword = document.getElementById('settingsNewPassword').value.trim();
+            if(!oldPassword||!newPassword) return showToast('⚠️ كلمة السر القديمة والجديدة مطلوبة');
+            if(newPassword.length<4) return showToast('⚠️ كلمة السر الجديدة قصيرة');
+            try {
+                await apiRequest('/api/profile/password', { method:'PUT', body: JSON.stringify({oldPassword, newPassword}) });
+                document.getElementById('settingsOldPassword').value='';
+                document.getElementById('settingsNewPassword').value='';
+                showToast('✅ تم تغيير كلمة السر');
+            } catch(e) { showToast('❌ '+e.message); }
+        }
+        async function changeBackgroundColor(color) {
+            try {
+                await apiRequest('/api/profile/background', { method:'PUT', body: JSON.stringify({backgroundColor:color}) });
+                currentUserData.backgroundColor = color;
+                document.body.style.backgroundColor = color;
+                refreshSettings();
+                showToast('🎨 تم تغيير لون الخلفية');
+            } catch(e) { showToast('❌ '+e.message); }
+        }
+        async function handleProfilePicUpload(event) {
+            const file = event.target.files[0];
+            if(!file) return;
+            const reader = new FileReader();
+            reader.onload = async function(e) {
+                const img = new Image();
+                img.onload = async function() {
+                    const canvas = document.createElement('canvas');
+                    const maxSize=200; let w=img.width, h=img.height;
+                    if(w>h){ if(w>maxSize){ h=h*maxSize/w; w=maxSize; } } else { if(h>maxSize){ w=w*maxSize/h; h=maxSize; } }
+                    canvas.width=w; canvas.height=h;
+                    canvas.getContext('2d').drawImage(img,0,0,w,h);
+                    const compressed = canvas.toDataURL('image/jpeg',0.7);
+                    try {
+                        await apiRequest('/api/profile/picture', { method:'PUT', body: JSON.stringify({profilePicture:compressed}) });
+                        currentUserData.profilePicture = compressed;
+                        refreshDashboard();
+                        refreshSettings();
+                        showToast('🖼️ تم تحديث الصورة');
+                    } catch(e) { showToast('❌ '+e.message); }
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+        async function removeProfilePic() {
+            try {
+                await apiRequest('/api/profile/picture', { method:'DELETE' });
+                currentUserData.profilePicture = '';
+                document.getElementById('profilePicInput').value='';
+                refreshDashboard();
+                refreshSettings();
+                showToast('🗑️ تمت إزالة الصورة');
+            } catch(e) { showToast('❌ '+e.message); }
+        }
+
+        // ========== البداية ==========
+        window.addEventListener('load', async () => {
+            if(getToken()) {
+                try {
+                    await refreshDashboard();
+                    showScreen('dashboardScreen');
+                } catch(e) { clearToken(); showScreen('loginScreen'); }
+            } else {
+                showScreen('loginScreen');
+            }
+        });
+
+        document.addEventListener('keydown', function(e){
+            if(e.key==='Enter'){
+                if(document.getElementById('loginScreen').classList.contains('active')) handleLogin();
+                else if(document.getElementById('registerScreen').classList.contains('active')) handleRegister();
+                else if(document.getElementById('forgotScreen').classList.contains('active')) handleForgotPassword();
+            }
+        });
+    </script>
+</body>
+</html>
